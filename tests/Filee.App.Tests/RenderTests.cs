@@ -1138,14 +1138,14 @@ public class RenderTests
             Assert.Equal(Avalonia.Media.Color.Parse("#101820"), Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(window.Background).Color);
             Assert.Equal(Avalonia.Media.Color.Parse("#E8E4D8"), BrushColor(window, "TextPrimaryBrush"));
             // Colours the file does not set, and the other variant, keep Filee's own.
-            Assert.Equal(Avalonia.Media.Color.Parse("#AEACA4"), BrushColor(window, "TextSecondaryBrush"));
+            Assert.Equal(Avalonia.Media.Color.Parse("#B7C3D7"), BrushColor(window, "TextSecondaryBrush"));
             Assert.Equal(Avalonia.Media.Color.Parse("#F6F5F1"), BrushColor(window, "PageBrush", Avalonia.Styling.ThemeVariant.Light));
             Save(window, "page-theme-custom.png");
 
             // Applying without a theme file (deleted, or emptied) restores the built-in colours on the open window.
             service.Apply(dark, "en");
             Pump();
-            Assert.Equal(Avalonia.Media.Color.Parse("#1B1B19"), Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(window.Background).Color);
+            Assert.Equal(Avalonia.Media.Color.Parse("#0B1220"), Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(window.Background).Color);
             window.Close();
 
             service.Apply(dark, "en", custom);

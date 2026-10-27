@@ -9,8 +9,10 @@
         Width="1080" Height="760" MinWidth="820" MinHeight="560"
         WindowStartupLocation="CenterScreen">
   <Grid ColumnDefinitions="230,*">
+    <Border Grid.ColumnSpan="2" Background="{DynamicResource GlassAtmosphereBrush}" IsHitTestVisible="False" />
     <!-- Navigation -->
-    <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="0,0,1,0">
+    <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource SubtleBorderBrush}"
+            BorderThickness="0,0,1,0">
       <DockPanel Margin="14,18">
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="8,0,0,20">
           <Image Source="avares://Filee/Assets/Icons/filee.png" Width="30" Height="30" />

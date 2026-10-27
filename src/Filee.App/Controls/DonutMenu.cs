@@ -881,10 +881,9 @@ public sealed partial class DonutMenu : Control
                 var wedge = CreateWedge(center, r1, r2, mid, span);
                 context.DrawGeometry(WithOpacity(SliceBrush, SliceOpacity * (item.IsEnabled ? 1 : 0.55)), BorderPen(), wedge);
 
-                // The accent fades in and out with the highlight (no floor: a floor made it vanish with a jump).
-                var emphasis = i == _dropTargetIndex ? 1.0 : hover;
-                if (emphasis > 0.01 && item.IsEnabled)
-                    context.DrawGeometry(WithOpacity(AccentBrush, 0.82 * Math.Clamp(emphasis, 0, 1)), null, wedge);
+                var emphasis = i == _dropTargetIndex || i == ActiveIndex ? 1.0 : hover;
+                if (item.IsEnabled)
+                    DrawGlassHighlight(context, wedge, emphasis);
 
                 var hot = (i == ActiveIndex || i == _dropTargetIndex) && item.IsEnabled;
                 DrawLabel(context, item, center, (r1 + r2) / 2, mid, span * (r1 + r2) / 2 - 10,
@@ -910,8 +909,8 @@ public sealed partial class DonutMenu : Control
                 {
                     var wedge = CreateWedge(center, r1, r2, slice.Mid, slice.Span);
                     context.DrawGeometry(WithOpacity(SliceBrush, SliceOpacity * (slice.Item.IsEnabled ? 1 : 0.55)), BorderPen(), wedge);
-                    if (slice.Emphasis > 0.01 && slice.Item.IsEnabled)
-                        context.DrawGeometry(WithOpacity(AccentBrush, 0.82 * Math.Clamp(slice.Emphasis, 0, 1)), null, wedge);
+                    if (slice.Item.IsEnabled)
+                        DrawGlassHighlight(context, wedge, slice.Emphasis);
                     DrawLabel(context, slice.Item, center, (r1 + r2) / 2, slice.Mid,
                         slice.Span * (r1 + r2) / 2 - 10, r2 - r1 - 16, typeface, typefaceRegular,
                         slice.Hot && slice.Item.IsEnabled);
@@ -1142,6 +1141,17 @@ public sealed partial class DonutMenu : Control
         context.DrawText(text, new Point(centerX - text.MaxTextWidth / 2, top));
 
     private Pen? BorderPen() => SliceBorderBrush is null ? null : new Pen(SliceBorderBrush, 1);
+
+    private void DrawGlassHighlight(DrawingContext context, StreamGeometry wedge, double emphasis)
+    {
+        var amount = Math.Clamp(emphasis, 0, 1);
+        if (amount <= 0.01)
+            return;
+
+        context.DrawGeometry(WithOpacity(AccentBrush, 0.16 * amount), null, wedge);
+        context.DrawGeometry(null, new Pen(WithOpacity(AccentBrush, 0.18 * amount), 4), wedge);
+        context.DrawGeometry(null, new Pen(WithOpacity(AccentBrush, 0.82 * amount), 1.25), wedge);
+    }
 
     private static FormattedText MakeText(string text, Typeface typeface, double size, IBrush? brush, double maxWidth, int maxLines = 1) =>
         new(text, CultureInfo.CurrentUICulture, TextDirection, typeface, size, brush)

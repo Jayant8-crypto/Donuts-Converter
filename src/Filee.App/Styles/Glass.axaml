@@ -1,0 +1,45 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <LinearGradientBrush x:Key="GlassAtmosphereBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="#164C78C6" Offset="0" />
+            <GradientStop Color="#00EAF0F8" Offset="1" />
+          </LinearGradientBrush>
+          <BoxShadows x:Key="GlassCardShadow">0 1 4 0 #1C172B46, 0 8 22 0 #14172B46</BoxShadows>
+          <BoxShadows x:Key="GlassCardHoverShadow">0 4 14 0 #26172B46, 0 14 36 0 #20172B46</BoxShadows>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <LinearGradientBrush x:Key="GlassAtmosphereBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+            <GradientStop Color="#321D4D83" Offset="0" />
+            <GradientStop Color="#124E86B8" Offset="0.62" />
+            <GradientStop Color="#0010192B" Offset="1" />
+          </LinearGradientBrush>
+          <BoxShadows x:Key="GlassCardShadow">0 2 8 0 #44040B19, 0 12 32 0 #55040B19</BoxShadows>
+          <BoxShadows x:Key="GlassCardHoverShadow">0 4 14 0 #50040B19, 0 14 36 0 #60040B19</BoxShadows>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource GlassCardShadow}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.18" />
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.18" />
+        <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.18" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.history-card:pointerover">
+    <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource GlassCardHoverShadow}" />
+  </Style>
+
+</Styles>

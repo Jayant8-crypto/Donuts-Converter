@@ -19,6 +19,7 @@ public sealed class TriggerService : IDisposable
     private readonly IPlatformServices _platform;
     private readonly ILogger<TriggerService> _log;
     private readonly GestureDetector _detector = new();
+    private readonly ShakeGestureDetector _shakeDetector;
     private readonly string _ownProcess = Process.GetCurrentProcess().ProcessName;
     private QueuedGlobalHook? _hook;
     private Thread? _hookThread;
@@ -26,6 +27,17 @@ public sealed class TriggerService : IDisposable
     private GnomePointerBridge? _gnomeBridge;
     private GnomePointerInput? _gnomeInput;
     private HashSet<string> _excluded = new(StringComparer.OrdinalIgnoreCase);
+    private bool _leftPressActivated; // hook thread only
+    private bool _shakeActivated; // hook thread only
+    private bool _shakeScopePending; // defer the native scope check until a real drag threshold is crossed
+    private int _leftPressX, _leftPressY;
+
+    private static readonly TriggerGesture ShakeScope = new()
+    {
+        Kind = TriggerKind.Drag,
+        Button = TriggerMouseButton.Left,
+        Scope = TriggerScope.FileManager,
+    };
 
     /// <summary>
     /// FILEE_TRACE_GESTURES=1 logs each mouse press and scope decision, to find why a gesture doesn't fire, and on
@@ -35,6 +47,10 @@ public sealed class TriggerService : IDisposable
 
     /// <summary>A mouse move this late (ms) goes to the trace: the clock itself is only 16 ms exact.</summary>
     private const long LateMove = 50;
+    private const int MinimumShakeStrokePixels = 32;
+    private const int ShakeStrokeThresholdMultiplier = 8;
+    private const int ShakeDirectionReversals = 3;
+    private static readonly long ShakeWindowTicks = Stopwatch.Frequency * 9 / 10;
 
     public TriggerService(IPlatformServices platform, ILogger<TriggerService> log)
         : this(platform, log, () => new QueuedGlobalHook())
@@ -48,9 +64,26 @@ public sealed class TriggerService : IDisposable
         _createHook = createHook;
         _detector.SystemDragThreshold = platform.SystemDragThreshold;
         _detector.ScopeFilter = InScope;
+        _shakeDetector = new ShakeGestureDetector(
+            minimumStroke: Math.Max(MinimumShakeStrokePixels, platform.SystemDragThreshold * ShakeStrokeThresholdMultiplier),
+            maximumDurationTicks: ShakeWindowTicks,
+            requiredReversals: ShakeDirectionReversals);
 
-        _detector.DragStarted += (g, x, y) => Post(() => DragStarted?.Invoke(this, new GestureEventArgs(g, x, y)));
-        _detector.DragEnded += (x, y) => Post(() => DragEnded?.Invoke(this, new GestureEventArgs(null, x, y)));
+        _detector.DragStarted += (g, x, y) =>
+        {
+            if (g.Button == TriggerMouseButton.Left)
+            {
+                if (_shakeActivated)
+                    return;
+                _leftPressActivated = true;
+            }
+            Post(() => DragStarted?.Invoke(this, new GestureEventArgs(g, x, y)));
+        };
+        _detector.DragEnded += (x, y) =>
+        {
+            if (!_shakeActivated)
+                Post(() => DragEnded?.Invoke(this, new GestureEventArgs(null, x, y)));
+        };
         _detector.HoldTriggered += (g, x, y) => Post(() => SelectionGesture?.Invoke(this, new GestureEventArgs(g, x, y)));
         _detector.KeyChordTriggered += (g, x, y) => Post(() => SelectionGesture?.Invoke(this, new GestureEventArgs(g, x, y)));
         _detector.HoldTimerRequested += (token, ms) =>
@@ -62,6 +95,9 @@ public sealed class TriggerService : IDisposable
 
     /// <summary>The mouse button of an active drag gesture was released.</summary>
     public event EventHandler<GestureEventArgs>? DragEnded;
+
+    /// <summary>A deliberate shake while a left-button drag is over a file manager.</summary>
+    public event EventHandler<GestureEventArgs>? ShakeDetected;
 
     /// <summary>A hold or keyboard gesture: open the donut for the file manager's current selection.</summary>
     public event EventHandler<GestureEventArgs>? SelectionGesture;
@@ -191,12 +227,33 @@ public sealed class TriggerService : IDisposable
                 if (Trace)
                     _log.LogInformation("Trace: press {Button} at {X},{Y}, mask {Mask} = {Modifiers}", e.Data.Button, e.Data.X, e.Data.Y, e.RawEvent.Mask, Map(e.RawEvent.Mask));
                 var (x, y) = ButtonPoint(e);
-                _detector.MouseDown(Map(e.Data.Button), x, y, Map(e.RawEvent.Mask));
+                var button = Map(e.Data.Button);
+                if (button == TriggerMouseButton.Left)
+                {
+                    _leftPressActivated = false;
+                    _shakeActivated = false;
+                    _leftPressX = x;
+                    _leftPressY = y;
+                    _shakeScopePending = OperatingSystem.IsWindows() && !_detector.Paused;
+                    _shakeDetector.Begin(eligible: false, x, y);
+                }
+                _detector.MouseDown(button, x, y, Map(e.RawEvent.Mask));
             };
             _hook.MouseReleased += (_, e) =>
             {
                 var (x, y) = ButtonPoint(e);
-                _detector.MouseUp(Map(e.Data.Button), x, y);
+                var button = Map(e.Data.Button);
+                _detector.MouseUp(button, x, y);
+                if (button == TriggerMouseButton.Left)
+                {
+                    var shakeEnded = _shakeActivated;
+                    _shakeDetector.End();
+                    _leftPressActivated = false;
+                    _shakeActivated = false;
+                    _shakeScopePending = false;
+                    if (shakeEnded)
+                        Post(() => DragEnded?.Invoke(this, new GestureEventArgs(null, x, y)));
+                }
             };
             _hook.MouseDragged += (_, e) => OnMove(e);
             _hook.MouseMoved += (_, e) => OnMove(e);
@@ -320,7 +377,32 @@ public sealed class TriggerService : IDisposable
             _log.LogInformation("Trace: a mouse move reached Filee {Late} ms late", late);
         (_estX, _estY) = (e.Data.X, e.Data.Y);
         LastCursor = (e.Data.X, e.Data.Y);
-        _detector.MouseMove(e.Data.X, e.Data.Y, Map(e.RawEvent.Mask), HeldButton(e.RawEvent.Mask));
+        var modifiers = Map(e.RawEvent.Mask);
+        var heldButton = HeldButton(e.RawEvent.Mask);
+        _detector.MouseMove(e.Data.X, e.Data.Y, modifiers, heldButton);
+        if (_detector.Paused)
+        {
+            _shakeDetector.End();
+            _shakeScopePending = false;
+            return;
+        }
+        if (_shakeScopePending && heldButton == TriggerMouseButton.Left
+            && (Math.Abs(e.Data.X - _leftPressX) > _platform.SystemDragThreshold
+                || Math.Abs(e.Data.Y - _leftPressY) > _platform.SystemDragThreshold))
+        {
+            _shakeScopePending = false;
+            if (InScope(ShakeScope, _leftPressX, _leftPressY))
+                _shakeDetector.Begin(eligible: true, _leftPressX, _leftPressY);
+        }
+        if (OperatingSystem.IsWindows() && !_leftPressActivated
+            && _shakeDetector.Move(e.Data.X, e.Data.Y, heldButton, Stopwatch.GetTimestamp()))
+        {
+            var x = e.Data.X;
+            var y = e.Data.Y;
+            _shakeActivated = true;
+            _leftPressActivated = true;
+            Post(() => ShakeDetected?.Invoke(this, new GestureEventArgs(null, x, y)));
+        }
     }
 
     private void OnRelativeMove(MouseHookEventArgs e)
@@ -329,7 +411,9 @@ public sealed class TriggerService : IDisposable
         _estY += e.Data.Y;
         if (Trace && HeldButton(e.RawEvent.Mask) != TriggerMouseButton.None)
             _log.LogInformation("Trace: relative move {Dx},{Dy} -> {X},{Y}, mask {Mask}", e.Data.X, e.Data.Y, _estX, _estY, e.RawEvent.Mask);
-        _detector.MouseMove(_estX, _estY, Map(e.RawEvent.Mask), HeldButton(e.RawEvent.Mask));
+        var modifiers = Map(e.RawEvent.Mask);
+        var heldButton = HeldButton(e.RawEvent.Mask);
+        _detector.MouseMove(_estX, _estY, modifiers, heldButton);
     }
 
     internal bool InScope(TriggerGesture gesture, int x, int y)

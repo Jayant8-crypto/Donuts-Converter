@@ -13,7 +13,7 @@
     <Setter Property="SliceBrush" Value="{DynamicResource SurfaceBrush}" />
     <Setter Property="SliceBorderBrush" Value="{DynamicResource SubtleBorderBrush}" />
     <Setter Property="CornerRadius" Value="{DynamicResource SoftRadius}" />
-    <Setter Property="CenterBrush" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="CenterBrush" Value="{DynamicResource SurfaceAltBrush}" />
     <Setter Property="AccentBrush" Value="{DynamicResource AccentBrush}" />
     <Setter Property="OnAccentBrush" Value="{DynamicResource OnAccentBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />

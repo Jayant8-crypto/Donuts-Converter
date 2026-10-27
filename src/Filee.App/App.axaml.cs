@@ -90,6 +90,7 @@ public partial class App : Application
         var radial = AppHost.Get<RadialController>();
         var platform = AppHost.Get<IPlatformServices>();
         triggers.DragStarted += (_, e) => radial.ShowForDrag(e.X, e.Y);
+        triggers.ShakeDetected += (_, e) => radial.ShowForDrag(e.X, e.Y);
         triggers.DragEnded += (_, _) => radial.OnDragGestureEnded();
         triggers.SelectionGesture += async (_, e) =>
         {
@@ -317,7 +318,7 @@ public partial class App : Application
 
         var store = AppHost.Get<UserDataStore>();
         ApplyInstallerChoices(options, store);
-        if (!options.Background || options.ShowSettings || !firstLaunch)
+        if (options.ShowSettings || !options.Background && (!firstLaunch || !OperatingSystem.IsWindows()))
             AppHost.Get<WindowService>().ShowMain(store.Settings.FirstRunCompleted ? null : "home");
 
         if (options.InstallEngines is { } engines)
